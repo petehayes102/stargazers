@@ -1,16 +1,38 @@
 use std::path::PathBuf;
 
+use analyse::analyse;
 use anyhow::Result;
-use clap::Parser;
-use github::{create_client, get_repository};
+use clap::{Args, Parser, Subcommand};
+use download::download;
 
+mod analyse;
 mod db;
+mod download;
 mod github;
 
 /// Fetch and analyse GitHub stargazers
 #[derive(Parser, Debug)]
-#[command(version, about, long_about = None)]
-struct Args {
+#[command(version, about, long_about = None, propagate_version = true)]
+struct Cli {
+    /// Path to database file
+    #[arg(short, long, default_value = "stargazers.db")]
+    db: PathBuf,
+
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(Debug, Subcommand)]
+enum Command {
+    /// Download data from GitHub
+    Download(DownloadArgs),
+
+    /// Analyse data and produce data file for GUI
+    Analyse(AnalyseArgs),
+}
+
+#[derive(Debug, Args)]
+struct DownloadArgs {
     /// Owner name
     #[arg(short, long)]
     owner: String,
@@ -23,92 +45,29 @@ struct Args {
     #[arg(short, long)]
     pat: String,
 
-    /// Path to database file
-    #[arg(short, long, default_value = "stargazers.db")]
-    db: PathBuf,
+    /// Only download new stargazers
+    #[arg(short, long, default_value_t = false)]
+    quick: bool,
+}
+
+#[derive(Debug, Args)]
+struct AnalyseArgs {
+    /// Path to data file
+    #[arg(short, long, default_value = "data.json")]
+    data: PathBuf,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let args = Args::parse();
+    let cli = Cli::parse();
 
-    let db = db::init(&args.db)?;
+    let db = db::init(&cli.db)?;
 
-    let client = create_client(&args.pat)?;
-    let repo = get_repository(&client, &args.owner, &args.repo).await?;
-
-    if !db::has_repo(&db, repo.id as i64)? {
-        println!("Adding repo: {}", repo.full_name);
-
-        db::add_repo(
-            &db,
-            repo.id as i64,
-            &repo.full_name,
-            repo.stargazers_count as i64,
-        )?;
-    }
-
-    for s in repo.get_stargazers(&client).await? {
-        println!("Adding user: {}", s.user.login);
-
-        if !db::has_user(&db, s.user.id as i64)? {
-            db::add_user(
-                &db,
-                s.user.id as i64,
-                &s.user.login,
-                s.user.name.as_deref(),
-                s.user.email.as_deref(),
-            )?;
+    match cli.command {
+        Command::Download(args) => {
+            download(&db, &args.pat, &args.owner, &args.repo, args.quick).await?
         }
-
-        db::add_stargazer(&db, s.user.id as i64, repo.id as i64, &s.starred_at)?;
-
-        // Get followers
-        for u in s.user.get_followers(&client).await? {
-            println!("Adding follower of {}: {}", s.user.login, u.login);
-
-            if !db::has_user(&db, u.id as i64)? {
-                db::add_user(
-                    &db,
-                    u.id as i64,
-                    &u.login,
-                    u.name.as_deref(),
-                    u.email.as_deref(),
-                )?;
-            }
-
-            db::add_follower(&db, s.user.id as i64, u.id as i64)?;
-        }
-
-        // Get starred repos
-        for r in s.user.get_starred(&client).await? {
-            println!(
-                "Adding starred repo of {}: {}",
-                s.user.login, r.repo.full_name
-            );
-
-            if !db::has_repo(&db, r.repo.id as i64)? {
-                db::add_repo(
-                    &db,
-                    r.repo.id as i64,
-                    &r.repo.full_name,
-                    r.repo.stargazers_count as i64,
-                )?;
-            }
-
-            db::add_stargazer(&db, s.user.id as i64, r.repo.id as i64, &r.starred_at)?;
-        }
-
-        // Get subscribed repos
-        for r in s.user.get_subscribed(&client).await? {
-            println!("Adding starred repo of {}: {}", s.user.login, r.full_name);
-
-            if !db::has_repo(&db, r.id as i64)? {
-                db::add_repo(&db, r.id as i64, &r.full_name, r.stargazers_count as i64)?;
-            }
-
-            db::add_subscriber(&db, s.user.id as i64, r.id as i64)?;
-        }
+        Command::Analyse(args) => analyse(&db, &args.data).await?,
     }
 
     Ok(())

@@ -122,3 +122,27 @@ pub fn add_follower(conn: &Connection, subject: i64, linked: i64) -> Result<()> 
     while stmt.next()? == State::Row {}
     Ok(())
 }
+
+pub fn get_top_repos(conn: &Connection, limit: u32) -> Result<Vec<(String, u32)>> {
+    let mut repos = Vec::new();
+
+    for row in conn
+        .prepare(
+            "SELECT full_name, count(*) as count
+        FROM repository r
+        LEFT JOIN user_repos ur ON (r.id = ur.repository AND ur.type = 'stargazer')
+        GROUP BY ur.repository
+        ORDER BY count DESC
+        LIMIT ?",
+        )?
+        .into_iter()
+        .bind((1, limit as i64))?
+    {
+        let row = row?;
+        let name: String = row.read::<&str, _>("full_name").to_owned();
+        let count = row.read::<i64, _>("count") as u32;
+        repos.push((name, count));
+    }
+
+    Ok(repos)
+}
