@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use analyse::analyse;
 use anyhow::Result;
 use clap::{Args, Parser, Subcommand};
@@ -14,10 +12,6 @@ mod github;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None, propagate_version = true)]
 struct Cli {
-    /// Path to database file
-    #[arg(short, long, default_value = "stargazers.db")]
-    db: PathBuf,
-
     #[command(subcommand)]
     command: Command,
 }
@@ -52,22 +46,18 @@ struct DownloadArgs {
 
 #[derive(Debug, Args)]
 struct AnalyseArgs {
-    /// Path to data file
-    #[arg(short, long, default_value = "data.json")]
-    data: PathBuf,
+    /// Open front end in browser
+    #[arg(short, long, default_value_t = false)]
+    open: bool,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    let db = db::init(&cli.db)?;
-
     match cli.command {
-        Command::Download(args) => {
-            download(&db, &args.pat, &args.owner, &args.repo, args.quick).await?
-        }
-        Command::Analyse(args) => analyse(&db, &args.data).await?,
+        Command::Download(args) => download(&args.pat, &args.owner, &args.repo, args.quick).await?,
+        Command::Analyse(args) => analyse(args.open).await?,
     }
 
     Ok(())

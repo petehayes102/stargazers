@@ -1,3 +1,3 @@
 /target
-stargazers.db
-data.json
+stargazers.sqlite
+.DS_Store

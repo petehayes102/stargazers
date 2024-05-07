@@ -1,16 +1,29 @@
-use std::{fs::File, io::Write, path::Path};
-
 use anyhow::Result;
-use sqlite::Connection;
+use rocket::{get, routes, serde::json::Json};
+use rocket_db_pools::{sqlx, Connection, Database};
 
 use crate::db::get_top_repos;
 
-pub async fn analyse<P: AsRef<Path>>(db: &Connection, path: P) -> Result<()> {
-    let repos = get_top_repos(db, 20)?;
-    let json = serde_json::to_string(&repos)?;
+#[derive(Database)]
+#[database("stargazers")]
+pub(crate) struct Stargazers(sqlx::SqlitePool);
 
-    let mut fh = File::create(path)?;
-    fh.write_all(json.as_bytes())?;
+pub async fn analyse(open: bool) -> Result<()> {
+    rocket::build()
+        .mount("/repos/top", routes![top_repos])
+        .launch()
+        .await?;
 
     Ok(())
+}
+
+#[get("/repos/top/<num>", format = "json")]
+async fn top_repos(
+    mut db: Connection<Stargazers>,
+    num: u32,
+) -> std::result::Result<Json<Vec<(String, u32)>>, String> {
+    match get_top_repos(&mut db, num).await {
+        Ok(repos) => Ok(Json(repos)),
+        Err(e) => Err(e.to_string()),
+    }
 }
