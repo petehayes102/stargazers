@@ -1,3 +1,5 @@
+use std::{fs::File, path::Path};
+
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use rocket_db_pools::Connection;
@@ -5,9 +7,14 @@ use sqlx::{query, Pool, Row, Sqlite};
 
 use crate::analyse::Stargazers;
 
-pub async fn init(path: &str) -> Result<Pool<Sqlite>> {
-    let pool = Pool::<Sqlite>::connect(&path).await?;
-    sqlx::migrate!("db/migrations/").run(&pool).await?;
+pub async fn init<P: AsRef<Path>>(path: P) -> Result<Pool<Sqlite>> {
+    if !path.as_ref().exists() {
+        File::create(&path)?;
+    }
+
+    let pool = Pool::<Sqlite>::connect(path.as_ref().to_str().unwrap()).await?;
+    sqlx::migrate!("db/migrations").run(&pool).await?;
+
     Ok(pool)
 }
 
@@ -99,7 +106,7 @@ pub async fn get_top_repos(
     Ok(query(
         "SELECT full_name, count(*) as count
         FROM repository r
-        LEFT JOIN user_repos ur ON (r.id = ur.repository AND ur.type = 'stargazer')
+        INNER JOIN user_repos ur ON (r.id = ur.repository AND ur.type = 'stargazer')
         GROUP BY ur.repository
         ORDER BY count DESC
         LIMIT ?",

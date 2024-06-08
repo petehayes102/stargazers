@@ -1,5 +1,11 @@
+use std::path::{Path, PathBuf};
+
 use anyhow::Result;
-use rocket::{get, routes, serde::json::Json};
+use rocket::{
+    fs::{relative, NamedFile},
+    get, routes,
+    serde::json::Json,
+};
 use rocket_db_pools::{sqlx, Connection, Database};
 
 use crate::db::get_top_repos;
@@ -9,12 +15,39 @@ use crate::db::get_top_repos;
 pub(crate) struct Stargazers(sqlx::SqlitePool);
 
 pub async fn analyse(open: bool) -> Result<()> {
-    rocket::build()
-        .mount("/repos/top", routes![top_repos])
-        .launch()
+    let server = rocket::build()
+        .mount("/", routes![static_web, top_repos])
+        .attach(Stargazers::init())
+        .ignite()
         .await?;
 
+    if open {
+        let http = if server.config().tls_enabled() {
+            "https"
+        } else {
+            "http"
+        };
+        webbrowser::open(&format!(
+            "{http}://{}:{}",
+            server.config().address,
+            server.config().port
+        ))
+        .unwrap();
+    }
+
+    server.launch().await?;
+
     Ok(())
+}
+
+#[get("/<path..>")]
+async fn static_web(path: PathBuf) -> Option<NamedFile> {
+    let mut path = Path::new(relative!("web/dist")).join(path);
+    if path.is_dir() {
+        path.push("index.html");
+    }
+
+    NamedFile::open(path).await.ok()
 }
 
 #[get("/repos/top/<num>", format = "json")]
