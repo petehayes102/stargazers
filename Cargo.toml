@@ -12,6 +12,11 @@ rocket = { version = "0.5", features = ["json"] }
 rocket_db_pools = { version = "0.2", features = ["sqlx_sqlite"] }
 serde = "1.0"
 serde_json = "1.0"
-sqlx = { version = "0.7", features = ["runtime-tokio", "sqlite"] }
+sqlx = { version = "0.7", default_features = false, features = [
+    "macros",
+    "migrate",
+    "runtime-tokio",
+    "sqlite",
+] }
 tokio = { version = "1.38", features = ["macros", "rt-multi-thread"] }
 webbrowser = "1.0"
