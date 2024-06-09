@@ -42,7 +42,7 @@ watch(num_starred, async (num) => (leaves.value = await get_data(num)));
       :width="width"
       :height="height"
       :viewBox="[-margin, -margin, width, height].join(' ')"
-      style="max-width: 100%; height: auto; font-size: 70%"
+      style="max-width: 100%; height: auto; font-size: 80%"
       text-anchor="middle"
     >
       <g v-for="leaf in leaves" :key="leaf.data[0]" :transform="`translate(${leaf.x}, ${leaf.y})`">
