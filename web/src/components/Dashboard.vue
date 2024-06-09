@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import * as d3 from "d3";
 
-const result = await fetch("/repos/top/50", {
+const result = await fetch(`${import.meta.env.VITE_API_URL || ""}/repos/top/50`, {
   method: "GET",
 });
 

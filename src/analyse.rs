@@ -2,9 +2,13 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use rocket::{
+    fairing::{Fairing, Info, Kind},
     fs::{relative, NamedFile},
-    get, routes,
+    get,
+    http::Header,
+    options, routes,
     serde::json::Json,
+    Request, Response,
 };
 use rocket_db_pools::{sqlx, Connection, Database};
 
@@ -14,12 +18,18 @@ use crate::db::get_top_repos;
 #[database("stargazers")]
 pub(crate) struct Stargazers(sqlx::SqlitePool);
 
+#[allow(dead_code)]
+struct Cors;
+
 pub async fn analyse(open: bool) -> Result<()> {
-    let server = rocket::build()
-        .mount("/", routes![static_web, top_repos])
-        .attach(Stargazers::init())
-        .ignite()
-        .await?;
+    let builder = rocket::build()
+        .mount("/", routes![static_web, top_repos, all_options])
+        .attach(Stargazers::init());
+
+    #[cfg(debug_assertions)]
+    let builder = builder.attach(Cors);
+
+    let server = builder.ignite().await?;
 
     if open {
         let http = if server.config().tls_enabled() {
@@ -58,5 +68,30 @@ async fn top_repos(
     match get_top_repos(&mut db, num).await {
         Ok(repos) => Ok(Json(repos)),
         Err(e) => Err(e.to_string()),
+    }
+}
+
+/// Catches all OPTION requests in order to get the CORS related Fairing triggered.
+#[allow(dead_code)]
+#[options("/<_..>")]
+fn all_options() {}
+
+#[rocket::async_trait]
+impl Fairing for Cors {
+    fn info(&self) -> Info {
+        Info {
+            name: "Cross-Origin-Resource-Sharing Fairing",
+            kind: Kind::Response,
+        }
+    }
+
+    async fn on_response<'r>(&self, _request: &'r Request<'_>, response: &mut Response<'r>) {
+        response.set_header(Header::new("Access-Control-Allow-Origin", "*"));
+        response.set_header(Header::new(
+            "Access-Control-Allow-Methods",
+            "POST, PATCH, PUT, DELETE, HEAD, OPTIONS, GET",
+        ));
+        response.set_header(Header::new("Access-Control-Allow-Headers", "*"));
+        response.set_header(Header::new("Access-Control-Allow-Credentials", "true"));
     }
 }
