@@ -430,14 +430,15 @@ impl Repository {
 }
 
 impl User {
-    pub async fn get_followers(&self, client: &Client) -> Result<Vec<User>> {
+    pub async fn get_following(&self, client: &Client) -> Result<Vec<User>> {
         let mut followers = Vec::new();
+        let url = self.following_url.replace("{/other_user}", "");
 
         let mut looping = true;
         let mut page = 1;
         while looping {
             let reply = client
-                .get(&self.followers_url)
+                .get(&url)
                 .query(&[("page", page), ("per_page", 100)])
                 .send()
                 .await?;

@@ -42,8 +42,8 @@ pub async fn download(pat: &str, owner: &str, repo: &str, quick: bool) -> Result
         db::add_stargazer(&db, s.user.id as i64, repo.id as i64, &s.starred_at).await?;
 
         // Get followers
-        for u in s.user.get_followers(&client).await? {
-            println!("Adding follower of {}: {}", s.user.login, u.login);
+        for u in s.user.get_following(&client).await? {
+            println!("Adding following of {}: {}", s.user.login, u.login);
 
             if !db::has_user(&db, u.id as i64).await? {
                 db::add_user(

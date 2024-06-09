@@ -118,3 +118,43 @@ pub async fn get_top_repos(
     .map(|row| (row.get("full_name"), row.get("count")))
     .collect())
 }
+
+pub async fn get_top_following(
+    conn: &mut Connection<Stargazers>,
+    limit: u32,
+) -> Result<Vec<(String, u32)>> {
+    Ok(query(
+        "SELECT username, count(*) as count
+        FROM user u
+        INNER JOIN user_users uu ON (u.id = uu.linked AND uu.type = 'follower')
+        GROUP BY uu.linked
+        ORDER BY count DESC
+        LIMIT ?",
+    )
+    .bind(limit)
+    .fetch_all(&mut ***conn)
+    .await?
+    .into_iter()
+    .map(|row| (row.get("username"), row.get("count")))
+    .collect())
+}
+
+pub async fn get_top_subscribed(
+    conn: &mut Connection<Stargazers>,
+    limit: u32,
+) -> Result<Vec<(String, u32)>> {
+    Ok(query(
+        "SELECT full_name, count(*) as count
+        FROM repository r
+        INNER JOIN user_repos ur ON (r.id = ur.repository AND ur.type = 'subscriber')
+        GROUP BY ur.repository
+        ORDER BY count DESC
+        LIMIT ?",
+    )
+    .bind(limit)
+    .fetch_all(&mut ***conn)
+    .await?
+    .into_iter()
+    .map(|row| (row.get("full_name"), row.get("count")))
+    .collect())
+}

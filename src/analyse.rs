@@ -12,7 +12,7 @@ use rocket::{
 };
 use rocket_db_pools::{sqlx, Connection, Database};
 
-use crate::db::get_top_repos;
+use crate::db::{get_top_following, get_top_repos, get_top_subscribed};
 
 #[derive(Database)]
 #[database("stargazers")]
@@ -23,7 +23,16 @@ struct Cors;
 
 pub async fn analyse(open: bool) -> Result<()> {
     let builder = rocket::build()
-        .mount("/", routes![static_web, top_repos, all_options])
+        .mount(
+            "/",
+            routes![
+                static_web,
+                top_repos,
+                top_following,
+                top_subscribed,
+                all_options
+            ],
+        )
         .attach(Stargazers::init());
 
     #[cfg(debug_assertions)]
@@ -66,6 +75,28 @@ async fn top_repos(
     num: u32,
 ) -> std::result::Result<Json<Vec<(String, u32)>>, String> {
     match get_top_repos(&mut db, num).await {
+        Ok(repos) => Ok(Json(repos)),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[get("/following/top/<num>", format = "json")]
+async fn top_following(
+    mut db: Connection<Stargazers>,
+    num: u32,
+) -> std::result::Result<Json<Vec<(String, u32)>>, String> {
+    match get_top_following(&mut db, num).await {
+        Ok(followed) => Ok(Json(followed)),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[get("/subscribed/top/<num>", format = "json")]
+async fn top_subscribed(
+    mut db: Connection<Stargazers>,
+    num: u32,
+) -> std::result::Result<Json<Vec<(String, u32)>>, String> {
+    match get_top_subscribed(&mut db, num).await {
         Ok(repos) => Ok(Json(repos)),
         Err(e) => Err(e.to_string()),
     }
